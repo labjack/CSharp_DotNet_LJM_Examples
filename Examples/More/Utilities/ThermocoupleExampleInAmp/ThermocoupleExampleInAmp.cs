@@ -52,7 +52,7 @@ namespace ThermocoupleExampleInAmp
             DEGF = 'F',
         }
 
-        public (double tcTemp, double tcVolts, double cjcTemp) GetReadingsInAmp(
+        public (double tcTemp, double tcVolts, double cjcTemp) getReadingsInAmp(
             int handle,
             int tcType,
             string ainChannel,
@@ -63,23 +63,29 @@ namespace ThermocoupleExampleInAmp
             double inAmpOffset,
             TempUnits tempUnits
         ){
+            const int NUM_FRAMES = 2;
+            string[] aNames = {ainChannel, cjcName};
+            double[] aValues = new double[NUM_FRAMES];
+            int errorAddress = 0;
             double tcTemp = 0, tcVolts = 0, cjcTemp = 0;
+
             try
             {
-                const int NUM_FRAMES = 2;
-                string[] aNames = {ainChannel, cjcName};
-                double[] aValues = new double[NUM_FRAMES];
-                int errorAddress = 0;
-
                 //Read the InAmp output voltage (connected to AIN#) and
                 //the CJC temperature.
-                LJM.eReadNames(handle, NUM_FRAMES, aNames, aValues, ref errorAddress);
+                LJM.eReadNames(
+                    handle,
+                    NUM_FRAMES,
+                    aNames,
+                    aValues,
+                    ref errorAddress
+                );
 
                 //Convert the InAmp voltage to the raw thermocouple voltage.
                 tcVolts = (aValues[0] - inAmpOffset) / inAmpGain;
 
                 //Apply scaling to CJC reading if necessary.
-                //At this point, the reading must be in units Kelvin.
+                //At this point the reading must be in units Kelvin.
                 cjcTemp = aValues[1] * cjcSlope + cjcOffset;
 
                 //Convert voltage reading to the thermocouple temperature.
@@ -97,13 +103,15 @@ namespace ThermocoupleExampleInAmp
                         break;
                     case TempUnits.DEGK:
                     default:
-                        //Assume DEGK. Nothing to do.
+                        //Assume DEGK, no conversion necessary.
                         break;
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Console.Out.WriteLine("Exception in ThermocoupleExampleInAmp.GetReadingsInAmp");
+                Console.Out.WriteLine(
+                    "Exception in ThermocoupleExampleInAmp.getReadingsInAmp"
+                );
                 throw;
             }
             return (tcTemp, tcVolts, cjcTemp);
@@ -115,14 +123,17 @@ namespace ThermocoupleExampleInAmp
             tce.performActions();
         }
 
-        public void showErrorMessage(LJM.LJMException e)
-        {
-            Console.Out.WriteLine("LJMException: " + e.ToString());
-            Console.Out.WriteLine(e.StackTrace);
-        }
-
         public void performActions()
         {
+            int tcType;
+            string ainChannel;
+            string cjcName;
+            double cjcSlope;
+            double cjcOffset;
+            double inAmpGain;
+            double inAmpOffset;
+            TempUnits tempUnits;
+            double tcTemp, tcVolts, cjcTemp;
             int handle = 0;
             int devType = 0;
             int conType = 0;
@@ -133,21 +144,35 @@ namespace ThermocoupleExampleInAmp
             string ipAddrStr = "";
             int intervalHandle = 1;
             int skippedIntervals = 0;
-            double tcTemp, tcVolts, cjcTemp;
 
             try
             {
-                //Open first found LabJack
+                //Open the first found LabJack.
                 LJM.OpenS("ANY", "ANY", "ANY", ref handle);  // Any device, Any connection, Any identifier
                 //LJM.OpenS("T8", "ANY", "ANY", ref handle);  // T8 device, Any connection, Any identifier
                 //LJM.OpenS("T7", "ANY", "ANY", ref handle);  // T7 device, Any connection, Any identifier
                 //LJM.OpenS("T4", "ANY", "ANY", ref handle);  // T4 device, Any connection, Any identifier
                 //LJM.Open(LJM.CONSTANTS.dtANY, LJM.CONSTANTS.ctANY, "ANY", ref handle);  // Any device, Any connection, Any identifier
 
-                LJM.GetHandleInfo(handle, ref devType, ref conType, ref serNum, ref ipAddr, ref port, ref maxBytesPerMB);
+                LJM.GetHandleInfo(
+                    handle,
+                    ref devType,
+                    ref conType,
+                    ref serNum,
+                    ref ipAddr,
+                    ref port,
+                    ref maxBytesPerMB
+                );
                 LJM.NumberToIP(ipAddr, ref ipAddrStr);
-                Console.WriteLine("Opened a LabJack with Device type: " + devType + ", Connection type: " + conType + ",");
-                Console.WriteLine("Serial number: " + serNum + ", IP address: " + ipAddrStr + ", Port: " + port + ",");
+                Console.WriteLine(
+                    "Opened a LabJack with Device type: " + devType + ", " +
+                    "Connection type: " + conType + ","
+                );
+                Console.WriteLine(
+                    "Serial number: " + serNum + ", " +
+                    "IP address: " + ipAddrStr + ", " +
+                    "Port: " + port + ","
+                );
                 Console.WriteLine("Max bytes per MB: " + maxBytesPerMB);
 
                 //Supported TC types are:
@@ -160,28 +185,32 @@ namespace ThermocoupleExampleInAmp
                 //    LJM_ttS (val=6007)
                 //    LJM_ttT (val=6008)
                 //    LJM_ttC (val=6009)
-                int tcType = LJM.CONSTANTS.ttK;
-                string ainChannel = "AIN6"; //Take a thermocouple reading on AIN6.
+                //Take a type K thermocouple measurement.
+                tcType = LJM.CONSTANTS.ttK;
+                //Take the thermocouple reading on AIN6.
+                ainChannel = "AIN6";
                 //Use the internal temp sensor for CJC.
-                string cjcName = "TEMPERATURE_DEVICE_K";
-                double cjcSlope = 1; //55.56 for LM34.
-                double cjcOffset = 0; //255.37 for LM34.
-                double inAmpGain = 51; //Assuming InAmp with x51 gain.
-                double inAmpOffset = 1.25; //Assuming InAmp with 1.25 V offset.
-                TempUnits tempUnits = TempUnits.DEGC; //Output temperature readings in °C.
+                cjcName = "TEMPERATURE_DEVICE_K";
+                cjcSlope = 1; //55.56 for LM34.
+                cjcOffset = 0; //255.37 for LM34.
+                inAmpGain = 51; //Assuming InAmp with x51 gain.
+                inAmpOffset = 1.25; //Assuming InAmp with 1.25 V offset.
+                //Output temperature readings in °C.
+                tempUnits = TempUnits.DEGC;
 
                 //Set the resolution index to the default setting (value=0).
                 LJM.eWriteName(handle, ainChannel + "_RESOLUTION_INDEX", 0);
 
-
-                Console.WriteLine("\nReading thermocouple temperature in a loop.  Press a key to stop.\n");
+                Console.WriteLine(
+                    "\nReading thermocouple temperature in a loop." +
+                    " Press a key to stop.\n"
+                );
                 LJM.StartInterval(intervalHandle, 1000000);
                 while (!Console.KeyAvailable)
                 {
-                    //Read with InAmp with gain 201x and offset 1.25 V settings.
-                    (tcTemp, tcVolts, cjcTemp) = GetReadingsInAmp(
+                    (tcTemp, tcVolts, cjcTemp) = getReadingsInAmp(
                         handle,
-                        tcType, // Type K thermocouple measurement
+                        tcType,
                         ainChannel,
                         cjcName,
                         cjcSlope,
@@ -230,7 +259,13 @@ namespace ThermocoupleExampleInAmp
             }
 
             Console.WriteLine("\nDone.\nPress the enter key to exit.");
-            Console.ReadLine();  //Pause for user
+            Console.ReadLine(); //Pause for user.
+        }
+
+        public void showErrorMessage(LJM.LJMException e)
+        {
+            Console.Out.WriteLine("LJMException: " + e.ToString());
+            Console.Out.WriteLine(e.StackTrace);
         }
     }
 }

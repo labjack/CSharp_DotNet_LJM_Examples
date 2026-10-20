@@ -78,14 +78,14 @@ namespace ThermocoupleExampleAINEF
 
         //Modbus name and address to read the CJC sensor at. The constructor
         //will set the address based on the name.
-        private string CJCName;
-        private int CJCAddress;
+        private string cjcName;
+        private int cjcAddress;
 
         //Slope of CJC voltage to Kelvin conversion (K/volt).
         //TEMPERATURE_DEVICE_K and TEMPERATURE# returns temp in K, so this
         //would be set to 1 if using it for CJC. If using an LM34 on some AIN
         //for CJC, this config should be 55.56.
-        private float CJCSlope;
+        private float cjcSlope;
 
         //Offset for CJC temp (in Kelvin). This would normally be 0 if reading
         //the register TEMPERATURE_DEVICE_K or TEMPERATURE# for CJC. If using
@@ -93,38 +93,39 @@ namespace ThermocoupleExampleAINEF
         //internal temp sensor, so you might adjust the offset down a few
         //degrees. If using an LM34 on some AIN for CJC, this config should
         //be 255.37.
-        private float CJCOffset;
+        private float cjcOffset;
 
         private TempUnits tempUnits;
 
         public ThermocoupleAINEF(
             TCType tcType,
             string ainChannel,
-            string CJCName,
-            float CJCSlope,
-            float CJCOffset,
+            string cjcName,
+            float cjcSlope,
+            float cjcOffset,
             TempUnits tempUnits
-        ) {
+        ){
+            int type = 0;
+
             this.tcType = tcType;
             this.ainChannel = ainChannel;
-            this.CJCName = CJCName;
-            this.CJCSlope = CJCSlope;
-            this.CJCOffset = CJCOffset;
+            this.cjcName = cjcName;
+            this.cjcSlope = cjcSlope;
+            this.cjcOffset = cjcOffset;
             this.tempUnits = tempUnits;
-            //Getting CJCAddress from CJCName.
-            int type = 0;
-            LJM.NameToAddress(CJCName, ref this.CJCAddress, ref type);
+            //Getting cjcAddress from cjcName.
+            LJM.NameToAddress(cjcName, ref this.cjcAddress, ref type);
         }
 
-        public void Setup(int handle)
+        public void setup(int handle)
         {
+            const int NUM_FRAMES = 5;
+            string[] aNames = new string[NUM_FRAMES];
+            double[] aValues = new double[NUM_FRAMES];
+            int errorAddress = -1;
+
             try
             {
-                const int NUM_FRAMES = 5;
-                string[] aNames = new string[NUM_FRAMES];
-                double[] aValues = new double[NUM_FRAMES];
-                int errorAddress = -1;
-
                 //For setting up the AIN#_EF_INDEX (thermocouple type).
                 aNames[0] = this.ainChannel + "_EF_INDEX";
                 aValues[0] = (double)this.tcType;
@@ -148,40 +149,45 @@ namespace ThermocoupleExampleAINEF
 
                 //For setting up the AIN#_EF_CONFIG_B (CJC address).
                 aNames[2] = this.ainChannel + "_EF_CONFIG_B";
-                aValues[2] = this.CJCAddress;
+                aValues[2] = this.cjcAddress;
 
                 //For setting up the AIN#_EF_CONFIG_D (CJC slope).
                 aNames[3] = this.ainChannel + "_EF_CONFIG_D";
-                aValues[3] = this.CJCSlope;
+                aValues[3] = this.cjcSlope;
 
                 //For setting up the AIN#_EF_CONFIG_E (CJC offset).
                 aNames[4] = this.ainChannel + "_EF_CONFIG_E";
-                aValues[4] = this.CJCOffset;
+                aValues[4] = this.cjcOffset;
 
-                LJM.eWriteNames(handle, NUM_FRAMES, aNames, aValues,
-                    ref errorAddress);
+                LJM.eWriteNames(
+                    handle,
+                    NUM_FRAMES,
+                    aNames,
+                    aValues,
+                    ref errorAddress
+                );
             }
             catch (Exception)
             {
-                Console.Out.WriteLine("Exception in ThermocoupleAINEF.Setup");
+                Console.Out.WriteLine("Exception in ThermocoupleAINEF.setup");
                 throw;
             }
         }
 
-        public (double tcTemp, double tcVolts, double cjcTemp) GetReadings(int handle)
+        public (double tcTemp, double tcVolts, double cjcTemp) getReadings(int handle)
         {
+            const int NUM_FRAMES = 3;
+            string[] aNames = {
+                this.ainChannel + "_EF_READ_A",
+                this.ainChannel + "_EF_READ_B",
+                this.ainChannel + "_EF_READ_C"
+            };
+            double[] aValues = new double[NUM_FRAMES];
+            int errorAddress = -1;
             double tcTemp = 0, tcVolts = 0, cjcTemp = 0;
+
             try
             {
-                const int NUM_FRAMES = 3;
-                string[] aNames = {
-                    this.ainChannel + "_EF_READ_A",
-                    this.ainChannel + "_EF_READ_B",
-                    this.ainChannel + "_EF_READ_C"
-                };
-                double[] aValues = new double[NUM_FRAMES];
-                int errorAddress = -1;
-
                 LJM.eReadNames(
                     handle,
                     NUM_FRAMES,
@@ -189,21 +195,21 @@ namespace ThermocoupleExampleAINEF
                     aValues,
                     ref errorAddress
                 );
-                tcTemp = aValues[0];   //Read value from AIN#_EF_READ_A.
-                tcVolts = aValues[1];  //Read value from AIN#_EF_READ_B.
-                cjcTemp = aValues[2];   //Read value from AIN#_EF_READ_C.
+                tcTemp = aValues[0]; //Read value from AIN#_EF_READ_A.
+                tcVolts = aValues[1]; //Read value from AIN#_EF_READ_B.
+                cjcTemp = aValues[2]; //Read value from AIN#_EF_READ_C.
             }
             catch (Exception)
             {
                 Console.Out.WriteLine(
-                    "Exception in ThermocoupleAINEF.GetReadings"
+                    "Exception in ThermocoupleAINEF.getReadings"
                 );
                 throw;
             }
             return (tcTemp, tcVolts, cjcTemp);
         }
 
-        public TempUnits GetTempUnits()
+        public TempUnits getTempUnits()
         {
             return this.tempUnits;
         }
@@ -218,6 +224,14 @@ namespace ThermocoupleExampleAINEF
         }
         public void performActions()
         {
+            int ainNumber;
+            string ainChannel;
+            string cjcName;
+            double ainRange;
+            int ainRes;
+            string[] aNames;
+            double[] aValues;
+            double tcTemp, tcVolts, cjcTemp;
             int handle = 0;
             int devType = 0;
             int conType = 0;
@@ -228,8 +242,8 @@ namespace ThermocoupleExampleAINEF
             string ipAddrStr = "";
             int intervalHandle = 1;
             int skippedIntervals = 0;
-            string cjcName;
-            double tcTemp, tcVolts, cjcTemp;
+            int errorAddress = -1;
+
             try
             {
                 //Open first found LabJack
@@ -250,18 +264,18 @@ namespace ThermocoupleExampleAINEF
                 );
                 LJM.NumberToIP(ipAddr, ref ipAddrStr);
                 Console.WriteLine(
-                    "Opened a LabJack with Device type: " + devType +
-                    ", Connection type: " + conType + ","
+                    "Opened a LabJack with Device type: " + devType + ", " +
+                    "Connection type: " + conType + ","
                 );
                 Console.WriteLine(
-                    "Serial number: " + serNum +
-                    ", IP address: " + ipAddrStr +
-                    ", Port: " + port + ","
+                    "Serial number: " + serNum + ", " +
+                    "IP address: " + ipAddrStr + ", " +
+                    "Port: " + port + ","
                 );
                 Console.WriteLine("Max bytes per MB: " + maxBytesPerMB);
 
-                int ainNumber = 0; //Take a thermocouple reading on AIN0.
-                string ainChannel = "AIN" + ainNumber;
+                ainNumber = 0; //Take a thermocouple reading on AIN0.
+                ainChannel = "AIN" + ainNumber;
                 if (devType == LJM.CONSTANTS.dtT8)
                 {
                     //Use TEMPERATURE# for CJC if using a T8.
@@ -280,11 +294,15 @@ namespace ThermocoupleExampleAINEF
                     TempUnits.DEGC //Output temperature values with units °C.
                 );
 
-                // Write the AIN_EF configurations to the device.
-                ain0EF.Setup(handle);
+                //Write the AIN_EF configurations to the device.
+                ain0EF.setup(handle);
 
-                //Set the resolution index to the default setting (value=0)
-                LJM.eWriteName(handle, ainChannel + "_RESOLUTION_INDEX", 0);
+                //Configure the analog input.
+                //If you set range according to the max TC voltage amplitude,
+                //the device will use the best/closest setting available.
+                ainRange = 0.07; //Will use ±0.1V on T7, ±0.075V on T8.
+                ainRes = 0; //Default AIN resolution index.
+
                 if (devType == LJM.CONSTANTS.dtT7)
                 {
                     //There are only certain valid differential channel
@@ -292,31 +310,52 @@ namespace ThermocoupleExampleAINEF
                     //numbered AIN and next odd AIN. For example,
                     //AIN0-AIN1, AIN2-AIN3. To take a differential reading
                     //between AIN0 and AIN1, set AIN0_NEGATIVE_CH to 1.
-
+                    aNames = new string[3];
+                    aValues = new double[3];
+                    aNames[0] = ainChannel + "_RANGE";
+                    aValues[0] = ainRange;
+                    aNames[1] = ainChannel + "_RESOLUTION_INDEX";
+                    aValues[1] = ainRes;
                     //Set up a single ended measurement.
-                    double negChannelNumber = LJM.CONSTANTS.GND;
-                    LJM.eWriteName(handle, ainChannel +"_NEGATIVE_CH",
-                        negChannelNumber);
+                    aNames[2] = ainChannel + "_NEGATIVE_CH";
+                    aValues[2] = LJM.CONSTANTS.GND;
                 }
+                else
+                {
+                    aNames = new string[2];
+                    aValues = new double[2];
+                    aNames[0] = ainChannel + "_RANGE";
+                    aValues[0] = ainRange;
+                    aNames[1] = ainChannel + "_RESOLUTION_INDEX";
+                    aValues[1] = ainRes;
+
+                }
+                LJM.eWriteNames(
+                    handle,
+                    aNames.Length,
+                    aNames,
+                    aValues,
+                    ref errorAddress
+                );
 
                 Console.WriteLine(
                     "\nReading thermocouple temperature in a loop." +
-                    "Press a key to stop.\n"
+                    " Press a key to stop.\n"
                 );
                 LJM.StartInterval(intervalHandle, 1000000);
 
                 while (!Console.KeyAvailable)
                 {
-                    (tcTemp, tcVolts, cjcTemp) = ain0EF.GetReadings(handle);
+                    (tcTemp, tcVolts, cjcTemp) = ain0EF.getReadings(handle);
                     Console.WriteLine(
                         "tcTemp: {0:N3} {1}," +
                         "\t tcVolts: {2:N6}," +
                         "\tCJTemp: {3:N3} {4}\n",
                         tcTemp,
-                        (char)ain0EF.GetTempUnits(),
+                        (char)ain0EF.getTempUnits(),
                         tcVolts,
                         cjcTemp,
-                        (char)ain0EF.GetTempUnits()
+                        (char)ain0EF.getTempUnits()
                     );
                     LJM.WaitForNextInterval(
                         intervalHandle,
@@ -348,7 +387,7 @@ namespace ThermocoupleExampleAINEF
             }
 
             Console.WriteLine("\nDone.\nPress the enter key to exit.");
-            Console.ReadLine();  //Pause for user
+            Console.ReadLine(); //Pause for user.
         }
         public void showErrorMessage(LJM.LJMException e)
         {
